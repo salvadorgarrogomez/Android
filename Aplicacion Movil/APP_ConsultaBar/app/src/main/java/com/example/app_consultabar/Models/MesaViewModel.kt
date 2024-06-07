@@ -1,43 +1,65 @@
 package com.example.app_consultabar.Models
 
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-
+import androidx.lifecycle.viewModelScope
+import com.example.app_consultabar.Services.ApiService
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 
 class MesaViewModel : ViewModel() {
-    val productosPorMesa: MutableMap<String, MutableList<ProductoConCantidad>> = mutableMapOf()
-    val comensalesPorMesa: MutableMap<String, String> = mutableMapOf()
+    private val _tables = MutableLiveData<List<TableEstado>>()
+    val tables: LiveData<List<TableEstado>> = _tables
 
-    fun agregarProducto(tableId: String, producto: ProductoConCantidad) {
-        val nombreSolo = producto.producto.split(" - ")[0]
-        // Obtener la lista de productos para esta mesa
-        val productosMesa = productosPorMesa.getOrPut(tableId) { mutableListOf() }
-
-        // Buscar el producto en la lista para esta mesa
-        val existingProduct = productosMesa.find { it.producto.split(" - ")[0] == nombreSolo }
-        if (existingProduct != null) {
-            // Si el producto ya existe, actualizar la cantidad y el precio medio
-            val nuevaCantidad = existingProduct.cantidad + producto.cantidad
-            existingProduct.precio = ((existingProduct.precio * existingProduct.cantidad) + (producto.precio * producto.cantidad)) / nuevaCantidad
-            existingProduct.cantidad = nuevaCantidad
-        } else {
-            // Si el producto no existe, agregarlo a la lista
-            productosMesa.add(producto)
+    init {
+        viewModelScope.launch {
+            obtenerDatosMesasPeriodicamente().collect { datos ->
+                val tableEstados = datos.map { dato ->
+                    val partes = dato.split(" - ")
+                    TableEstado(
+                        id = partes[0].toInt(),
+                        name = partes[1],
+                        estado = partes[3],
+                        comensales = partes[2].toInt()
+                    )
+                }
+                _tables.value = tableEstados
+            }
         }
     }
 
-    fun establecerNumComensales(tableId: String, numComensales: String) {
-        comensalesPorMesa[tableId] = numComensales
+    private fun obtenerDatosMesasPeriodicamente(): Flow<List<String>> = flow {
+        while (true) {
+            try {
+                val datos = ApiService.tablesDatosService.getDatosMesas()
+                emit(datos)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emit(emptyList())
+            }
+            delay(5000) // Intervalo de actualización de 5 segundos
+        }
     }
 
-    fun obtenerNumComensales(tableId: String): String? {
-        return comensalesPorMesa[tableId]
-    }
-
-    fun eliminarProducto(tableId: String, productName: String) {
-        val productosMesa = productosPorMesa[tableId] ?: return
-        productosMesa.removeAll { it.producto.startsWith(productName) }
+    fun establecerNumComensales(tableId: Int, numComensales: Int) {
+        _tables.value = _tables.value?.map { table ->
+            if (table.id == tableId) {
+                table.copy(comensales = numComensales)
+            } else {
+                table
+            }
+        }
     }
 }
+
+
+
+
+
 
 
 

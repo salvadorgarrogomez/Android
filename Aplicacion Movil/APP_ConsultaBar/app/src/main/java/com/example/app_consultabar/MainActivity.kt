@@ -15,23 +15,23 @@ import androidx.navigation.navArgument
 import com.example.app_consultabar.Interfaces.DetallesMesas
 import com.example.app_consultabar.Interfaces.ImagenInicio
 import com.example.app_consultabar.Interfaces.PantallaMesas
-import com.example.app_consultabar.Models.MesaViewModel
+import com.example.app_consultabar.Models.ProductoViewModel
 
 class MainActivity : ComponentActivity() {
-    private val mesaViewModel by viewModels<MesaViewModel>()
+    private val productoViewModel by viewModels<ProductoViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             val navController = rememberNavController()
-            MyApp(navController = navController, mesaViewModel = mesaViewModel)
+            MyApp(navController = navController, productoViewModel = productoViewModel)
         }
     }
 }
 
 
 @Composable
-fun MyApp(navController: NavController, mesaViewModel: MesaViewModel) {
+fun MyApp(navController: NavController, productoViewModel: ProductoViewModel) {
     NavHost(navController = navController as NavHostController, startDestination = "splash") {
         composable("splash") {
             ImagenInicio(navController)
@@ -44,7 +44,10 @@ fun MyApp(navController: NavController, mesaViewModel: MesaViewModel) {
             arguments = listOf(navArgument("tableId") { type = NavType.StringType })
         ) { backStackEntry ->
             val tableId = backStackEntry.arguments?.getString("tableId")
-            DetallesMesas(navController, tableId, mesaViewModel)
+            DetallesMesas(navController, tableId, productoViewModel)
         }
     }
 }
+
+
+

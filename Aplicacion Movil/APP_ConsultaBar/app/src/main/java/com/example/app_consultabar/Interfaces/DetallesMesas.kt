@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -14,17 +13,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.app_consultabar.Models.MesaViewModel
 import com.example.app_consultabar.Models.ProductoConCantidad
 import com.example.app_consultabar.Services.ApiService
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
+import com.example.app_consultabar.Models.ProductoViewModel
 
 
 @Composable
-fun DetallesMesas(navController: NavController, tableId: String?, mesaViewModel: MesaViewModel) {
-    var numComensales by remember { mutableStateOf(mesaViewModel.obtenerNumComensales(tableId ?: "") ?: "") }
+fun DetallesMesas(navController: NavController, tableId: String?, productoViewModel: ProductoViewModel) {
+    var numComensales by remember { mutableStateOf(productoViewModel.obtenerNumComensales(tableId ?: "") ?: "") }
     var numCantidad by remember { mutableStateOf("") }
     var newProduct by remember { mutableStateOf("") }
     var selectedLineId by remember { mutableStateOf<Int?>(null) }
@@ -32,7 +31,7 @@ fun DetallesMesas(navController: NavController, tableId: String?, mesaViewModel:
     val coroutineScope = rememberCoroutineScope()
 
     // Obtener la lista de productos para esta mesa del ViewModel
-    val productosPorMesa = remember { mutableStateListOf<ProductoConCantidad>().apply { addAll(mesaViewModel.productosPorMesa[tableId ?: ""] ?: emptyList()) } }
+    val productosPorMesa = remember { mutableStateListOf<ProductoConCantidad>().apply { addAll(productoViewModel.productosPorMesa[tableId ?: ""] ?: emptyList()) } }
 
     LaunchedEffect(Unit) {
         coroutineScope.launch {
@@ -71,7 +70,7 @@ fun DetallesMesas(navController: NavController, tableId: String?, mesaViewModel:
             onValueChange = {
                 numComensales = it
                 // Guardar el número de comensales en el ViewModel
-                mesaViewModel.establecerNumComensales(tableId ?: "", it)
+                productoViewModel.establecerNumComensales(tableId ?: "", it)
             },
             label = { Text("Número de Comensales") },
             modifier = Modifier.fillMaxWidth()
@@ -109,7 +108,7 @@ fun DetallesMesas(navController: NavController, tableId: String?, mesaViewModel:
                         val precioUnitario = newProduct.split(" - ")[1].replace(",", ".").replace("€", "").toDouble()
                         val producto = ProductoConCantidad(newProduct, cantidad, precioUnitario)
                         // Agregar o actualizar el producto en el ViewModel
-                        mesaViewModel.agregarProducto(tableId ?: "", producto)
+                        productoViewModel.agregarProducto(tableId ?: "", producto)
                         // Actualizar el estado de la lista de productos
                         val existingIndex = productosPorMesa.indexOfFirst { it.producto.split(" - ")[0] == newProduct.split(" - ")[0] }
                         if (existingIndex != -1) {
@@ -198,7 +197,7 @@ fun DetallesMesas(navController: NavController, tableId: String?, mesaViewModel:
                         selectedLineId?.let { index ->
                             val productName = productosPorMesa.getOrNull(index)?.producto?.split(" - ")?.get(0)
                             productName?.let { productId ->
-                                mesaViewModel.eliminarProducto(tableId ?: "", productId)
+                                productoViewModel.eliminarProducto(tableId ?: "", productId)
                                 // Actualizar el estado de la lista de productos
                                 productosPorMesa.removeAt(index)
                                 // Restablecer selectedLineId a null

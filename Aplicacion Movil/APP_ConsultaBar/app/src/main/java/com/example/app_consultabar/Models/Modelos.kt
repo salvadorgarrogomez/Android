@@ -19,3 +19,17 @@ data class Productos(
     val tipoPorcion: String
 )
 
+data class Mesas(
+    val id: Int,
+    val name: String,
+    val estado: String
+)
+
+data class TableEstado(
+    val id: Int,
+    val name: String,
+    val estado: String, // Asegúrate de tener esta propiedad
+    val comensales: Int
+)
+
+
