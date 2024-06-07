@@ -3,6 +3,7 @@ package com.example.api_comandas.servicios;
 import com.example.api_comandas.entidades.Categorias;
 import com.example.api_comandas.repositorios.CategoriasRepositorio;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,7 +20,7 @@ public class CategoriasServicio {
     }
 
     public List<String> obtenerNombresDeCategorias() {
-        List<Categorias> categorias = categoriasRepositorio.findAll();
+        List<Categorias> categorias = categoriasRepositorio.findAll((Sort.by("id").ascending()));
         return categorias.stream()
                 .map(Categorias::getNombre) // Obtiene solo el nombre de cada categoría
                 .collect(Collectors.toList());
