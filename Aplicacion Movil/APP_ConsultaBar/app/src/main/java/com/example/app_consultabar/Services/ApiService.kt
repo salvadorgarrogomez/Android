@@ -11,10 +11,7 @@ object ApiService {
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 
-    val productService: ProductService = retrofit.create(ProductService::class.java)
-    val tableService: TablesService = retrofit.create(TablesService::class.java)
-    val tablesEstadoService: TablesEstadoService = retrofit.create(TablesEstadoService::class.java)
-    val tablesDatosService: TablesDatosService = retrofit.create(TablesDatosService::class.java)
-
+    val productService: ProductosService = retrofit.create(ProductosService::class.java)
+    val tablesDatosService: MesasDatosService = retrofit.create(MesasDatosService::class.java)
 
 }
