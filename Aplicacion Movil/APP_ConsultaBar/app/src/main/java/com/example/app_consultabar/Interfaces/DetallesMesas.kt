@@ -13,27 +13,70 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.app_consultabar.Models.ProductoConCantidad
+import com.example.app_consultabar.Models.Productos
 import com.example.app_consultabar.Services.ApiService
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app_consultabar.Models.ProductoViewModel
+import java.text.DecimalFormat
+import com.example.app_consultabar.Models.MesaViewModel
+import com.example.app_consultabar.Services.WebSocketManager
+import com.google.gson.Gson
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 
 
 @Composable
-fun DetallesMesas(navController: NavController, tableId: String?, productoViewModel: ProductoViewModel) {
-    var numComensales by remember { mutableStateOf(productoViewModel.obtenerNumComensales(tableId ?: "") ?: "") }
+fun DetallesMesas(
+    navController: NavController,
+    tableId: Long?,
+    tableName: String?,
+    productoViewModel: ProductoViewModel = viewModel(),
+    mesaViewModel: MesaViewModel = viewModel(),
+) {
+    var numComensales by remember { mutableStateOf(productoViewModel.obtenerNumComensales((tableId ?: "").toString()) ?: "") }
     var numCantidad by remember { mutableStateOf("") }
     var newProduct by remember { mutableStateOf("") }
     var selectedLineId by remember { mutableStateOf<Int?>(null) }
     val nombresProductos = remember { mutableStateListOf<String>() }
     val coroutineScope = rememberCoroutineScope()
 
-    // Obtener la lista de productos para esta mesa del ViewModel
-    val productosPorMesa = remember { mutableStateListOf<ProductoConCantidad>().apply { addAll(productoViewModel.productosPorMesa[tableId ?: ""] ?: emptyList()) } }
+    val mesas = mesaViewModel.tables.observeAsState()
+    val mesaSeleccionada = mesas.value?.find { it.id == tableId?.toInt() }
+
+    val productosPorMesa = remember {
+        mutableStateListOf<Productos>().apply {
+            addAll(productoViewModel.obtenerProductosPorMesa(tableId ?: -1))
+        }
+    }
+
+    val webSocketManager = remember {
+        WebSocketManager { message ->
+            val json = Gson().fromJson(message, Map::class.java)
+            val receivedTableId = (json["tableId"] as Double).toLong()
+            if (receivedTableId == tableId) {
+                val productos = Gson().fromJson(Gson().toJson(json["productos"]), Array<Productos>::class.java).toList()
+                productosPorMesa.clear()
+                productosPorMesa.addAll(productos)
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
+        webSocketManager.connect()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            webSocketManager.close()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        webSocketManager.connect()
         coroutineScope.launch {
             try {
                 val response = ApiService.productService.obtenerDatosProductos()
@@ -62,19 +105,19 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
     }
 
     Column(modifier = Modifier.padding(5.dp)) {
-        Text(text = "Detalles de la $tableId", style = MaterialTheme.typography.titleLarge)
+        Text(text = "Detalles de la $tableName", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(16.dp))
 
         TextField(
             value = numComensales,
             onValueChange = {
                 numComensales = it
-                // Guardar el número de comensales en el ViewModel
-                productoViewModel.establecerNumComensales(tableId ?: "", it)
+                productoViewModel.establecerNumComensales((tableId ?: "").toString(), (it.toIntOrNull() ?: 0).toString())
             },
             label = { Text("Número de Comensales") },
             modifier = Modifier.fillMaxWidth()
         )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         TextField(
@@ -94,23 +137,30 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            // Cuando agregas un producto, guárdalo en el ViewModel
             Button(onClick = {
                 if (newProduct.isNotEmpty() && numCantidad.isNotEmpty()) {
                     val cantidad = numCantidad.toIntOrNull()
                     if (cantidad != null) {
                         val precioUnitario = newProduct.split(" - ")[1].replace(",", ".").replace("€", "").toDouble()
-                        val producto = ProductoConCantidad(newProduct, cantidad, precioUnitario)
-                        // Agregar o actualizar el producto en el ViewModel
-                        productoViewModel.agregarProducto(tableId ?: "", producto)
-                        // Actualizar el estado de la lista de productos
-                        val existingIndex = productosPorMesa.indexOfFirst { it.producto.split(" - ")[0] == newProduct.split(" - ")[0] }
+                        val producto = Productos(newProduct, cantidad, precioUnitario)
+
+                        coroutineScope.launch {
+                            productoViewModel.agregarProducto(tableId ?: 0L, producto)
+
+                            val productos = productoViewModel.obtenerProductosPorMesa(tableId ?: -1)
+                            webSocketManager.send(tableId ?: 0L, productos)
+                        }
+
+                        val existingIndex = productosPorMesa.indexOfFirst {
+                            it.producto.split(" - ")[0] == newProduct.split(" - ")[0]
+                        }
                         if (existingIndex != -1) {
                             productosPorMesa[existingIndex] = productosPorMesa[existingIndex].copy(
                                 precio = ((productosPorMesa[existingIndex].precio * productosPorMesa[existingIndex].cantidad) + (producto.precio * producto.cantidad)) / (productosPorMesa[existingIndex].cantidad + producto.cantidad)
@@ -118,8 +168,31 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
                         } else {
                             productosPorMesa.add(producto)
                         }
-                        // Forzar una recomposición del Composable
-                        productosPorMesa.add(ProductoConCantidad("", 0, 0.0))
+
+                        Log.d("DetallesMesas", "ID de la mesa: $tableId")
+                        val nuevoEstadoMesa = "ocupado"
+                        val nuevoComensales = numComensales.toIntOrNull() ?: 0
+
+                        CoroutineScope(Dispatchers.IO).launch {
+                            try {
+                                val estadoResponse = mesaViewModel.cambiarEstadoMesa(tableId ?: 0L, nuevoEstadoMesa)
+                                if (estadoResponse.isSuccessful) {
+                                    Log.d("DetallesMesasScreen", "Estado de la mesa actualizado correctamente")
+                                } else {
+                                    Log.e("DetallesMesasScreen", "Error al actualizar estado de la mesa: ${estadoResponse.code()} - ${estadoResponse.message()}")
+                                }
+                                val comensalesResponse = mesaViewModel.actualizarComensalesMesa(tableId ?: 0L, nuevoComensales)
+                                if (comensalesResponse.isSuccessful) {
+                                    Log.d("DetallesMesasScreen", "Comensales de la mesa actualizados correctamente")
+                                } else {
+                                    Log.e("DetallesMesasScreen", "Error al actualizar comensales de la mesa: ${comensalesResponse.code()} - ${comensalesResponse.message()}")
+                                }
+                            } catch (e: Exception) {
+                                Log.e("DetallesMesasScreen", "Error de red al actualizar estado o comensales de la mesa", e)
+                            }
+                        }
+
+                        productosPorMesa.add(Productos("", 0, 0.0))
                         productosPorMesa.removeLast()
                         newProduct = ""
                         numCantidad = ""
@@ -129,9 +202,13 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
                 Text("Agregar Producto")
             }
         }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         Text("Comensales en la mesa: $numComensales")
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Comensales en la mesa confirmados: ${mesaSeleccionada?.comensales ?: 0}")
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn {
@@ -140,7 +217,10 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
                 val nombre = nombreYPrecio[0]
                 val precio = nombreYPrecio[1]
                 val cantidad = product.cantidad
+
                 val totalPrecio = product.cantidad * product.precio
+                val decimalFormat = DecimalFormat("#,###.00")
+                val totalPrecioFormateado = decimalFormat.format(totalPrecio)
 
                 val isSelected = selectedLineId == index
                 val backgroundColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
@@ -151,7 +231,6 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
                         .fillMaxWidth()
                         .padding(vertical = 8.dp)
                         .clickable {
-                            // Guardar el ID del producto seleccionado
                             selectedLineId = index
                         }
                         .background(backgroundColor)
@@ -161,7 +240,7 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
                             withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = textColor)) {
                                 append(nombre)
                             }
-                            append(" - Cantidad: $cantidad - Precio unitario: $precio - Precio total: $totalPrecio€")
+                            append(" - Cantidad: $cantidad - Precio unitario: $precio - Precio total: $totalPrecioFormateado€")
                         },
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
@@ -171,7 +250,6 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
 
         LaunchedEffect(productosPorMesa) {
             if (selectedLineId != null && selectedLineId !in productosPorMesa.indices) {
-                // Si el elemento seleccionado ya no está en la lista, restablecer selectedLineId a null
                 selectedLineId = null
             }
         }
@@ -191,22 +269,21 @@ fun DetallesMesas(navController: NavController, tableId: String?, productoViewMo
                     .padding(bottom = 16.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                Button(
-                    onClick = {
-                        // Implementación para borrar la línea seleccionada
-                        selectedLineId?.let { index ->
-                            val productName = productosPorMesa.getOrNull(index)?.producto?.split(" - ")?.get(0)
-                            productName?.let { productId ->
-                                productoViewModel.eliminarProducto(tableId ?: "", productId)
-                                // Actualizar el estado de la lista de productos
-                                productosPorMesa.removeAt(index)
-                                // Restablecer selectedLineId a null
-                                selectedLineId = null
-                            }
+                Button(onClick = {
+                    selectedLineId?.let { selectedIndex ->
+                        val selectedProduct = productosPorMesa[selectedIndex]
+                        coroutineScope.launch {
+                            productoViewModel.eliminarProducto(tableId ?: 0L, selectedProduct.producto)
+
+                            // Enviar el mensaje al WebSocket
+                            val productos = productoViewModel.obtenerProductosPorMesa(tableId ?: -1)
+                            webSocketManager.send(tableId ?: 0L, productos)
                         }
+                        productosPorMesa.removeAt(selectedIndex)
+                        selectedLineId = null
                     }
-                ) {
-                    Text("Borrar línea")
+                }) {
+                    Text("Eliminar Producto Seleccionado")
                 }
             }
         }
@@ -252,4 +329,5 @@ fun AutoCompleteTextField(
         }
     }
 }
+
 

@@ -25,10 +25,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val navController = rememberNavController()
             MyApp(navController = navController, productoViewModel = productoViewModel)
+            }
         }
     }
-}
-
 
 @Composable
 fun MyApp(navController: NavController, productoViewModel: ProductoViewModel) {
@@ -40,14 +39,21 @@ fun MyApp(navController: NavController, productoViewModel: ProductoViewModel) {
             PantallaMesas(navController)
         }
         composable(
-            "table/{tableId}",
-            arguments = listOf(navArgument("tableId") { type = NavType.StringType })
+            "table/{tableId}/{tableName}",
+            arguments = listOf(
+                navArgument("tableId") { type = NavType.LongType },
+                navArgument("tableName") { type = NavType.StringType }
+            )
         ) { backStackEntry ->
-            val tableId = backStackEntry.arguments?.getString("tableId")
-            DetallesMesas(navController, tableId, productoViewModel)
+            val tableId = backStackEntry.arguments?.getLong("tableId")
+            val tableName = backStackEntry.arguments?.getString("tableName")
+            if (tableId != null) {
+                DetallesMesas(
+                    navController,
+                    tableId,
+                    tableName,
+                    productoViewModel)
+            }
         }
     }
 }
-
-
-

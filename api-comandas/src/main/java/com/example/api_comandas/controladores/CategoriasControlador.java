@@ -16,7 +16,7 @@ public class CategoriasControlador {
         this.categoriasServicio = categoriasServicio;
     }
 
-    @GetMapping("/categorias/nombres")
+    @GetMapping("/categorias")
     public List<String> obtenerNombresDeCategorias() {
         return categoriasServicio.obtenerNombresDeCategorias();
     }
