@@ -35,7 +35,7 @@ fun DetallesMesas(
     tableId: Long?,
     tableName: String?,
     productoViewModel: ProductoViewModel = viewModel(),
-    mesaViewModel: MesaViewModel = viewModel(),
+    mesaViewModel: MesaViewModel = viewModel()
 ) {
     var numComensales by remember { mutableStateOf(productoViewModel.obtenerNumComensales((tableId ?: "").toString()) ?: "") }
     var numCantidad by remember { mutableStateOf("") }
@@ -65,18 +65,15 @@ fun DetallesMesas(
         }
     }
 
-    LaunchedEffect(Unit) {
-        webSocketManager.connect()
-    }
-
     DisposableEffect(Unit) {
+        webSocketManager.connect()
         onDispose {
             webSocketManager.close()
         }
     }
 
+
     LaunchedEffect(Unit) {
-        webSocketManager.connect()
         coroutineScope.launch {
             try {
                 val response = ApiService.productService.obtenerDatosProductos()
@@ -154,9 +151,11 @@ fun DetallesMesas(
                         coroutineScope.launch {
                             productoViewModel.agregarProducto(tableId ?: 0L, producto)
 
+                            // Obtener y enviar la lista actualizada de productos al WebSocket
                             val productos = productoViewModel.obtenerProductosPorMesa(tableId ?: -1)
                             webSocketManager.send(tableId ?: 0L, productos)
                         }
+
 
                         val existingIndex = productosPorMesa.indexOfFirst {
                             it.producto.split(" - ")[0] == newProduct.split(" - ")[0]
@@ -329,5 +328,3 @@ fun AutoCompleteTextField(
         }
     }
 }
-
-
