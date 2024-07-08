@@ -1,6 +1,5 @@
 package com.example.api_comandas.servicios;
 
-import com.example.api_comandas.entidades.Categorias;
 import com.example.api_comandas.entidades.Productos;
 import com.example.api_comandas.repositorios.ProductosRepositorio;
 import org.springframework.beans.factory.annotation.Autowired;
